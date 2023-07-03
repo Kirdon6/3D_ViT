@@ -16,7 +16,7 @@ class at_table():
         propensities_sasa_invalid = dict()
         hydrophobicity = dict()
             
-        with open(r'p2rank\src\main\resources\tables\atomic-properties.csv') as file:
+        with open(r'tables\atomic-properties.csv') as file:
             file.readline()
             for line in file.readlines():
                 split = line.split(',')
@@ -39,7 +39,7 @@ class at_table():
         acceptor = dict()
         donor = dict()
         
-        with open(r'p2rank\src\main\resources\tables\volsite-atomic-properties.csv') as file:
+        with open(r'C:\Users\ROG\Documents\3D_ViT\tables\volsite-atomic-properties.csv') as file:
             file.readline()
             for line in file.readlines():
                 split = line.split(',')
@@ -59,64 +59,97 @@ class at_table():
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._propensities_valid[name]
-    
+        try:
+            return self._propensities_valid[name]
+        except:
+            return 0
+        
     def get_propensities_invalid(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._propensities_invalid[name]
-    
+        try:
+            return self._propensities_invalid[name]
+        except:
+            return 0
+        
     def get_propensities_sasa_valid(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._propensities_sasa_valid[name]
-    
+        try:
+            return self._propensities_sasa_valid[name]
+        except:
+            return 0
+        
     def get_propensities_sasa_invalid(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._propensities_sasa_invalid[name]
-    
+        try:
+            return self._propensities_sasa_invalid[name]
+        except:
+            return 0
+        
     def get_hydrophobicity(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._hydrophobicity[name]
-    
+        try:
+            return self._hydrophobicity[name]
+        except:
+            return 0
+        
     def get_volsite_aromatic(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._aromatic[name]
-    
+        try:
+            return self._aromatic[name]
+        except:
+            return 0
+        
     def get_volsite_cation(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._cation[name]
-    
+        try:
+            return self._cation[name]
+        except:
+            return 0
+        
     def get_volsite_anion(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._anion[name]
-    
+        try:
+            return self._anion[name]
+        except:
+            return 0
+        
     def get_volsite_hydrophobic(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._hydrophobic[name]
-    
+        try:
+            return self._hydrophobic[name]
+        except:
+            return 0
+        
     def get_volsite_acceptor(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'
         name = f'{resname}.{atom}'
-        return self._acceptor[name]
+        try:
+            return self._acceptor[name]
+        except:
+            return 0
     
     def get_volsite_donor(self, resname, atom):
         if atom == 'OXT':
             atom = 'O'        
         name = f'{resname}.{atom}'
-        return self._donor[name]
+        try:            
+            return self._donor[name]
+        except:
+            return 0
