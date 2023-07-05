@@ -18,6 +18,10 @@ class Dataset:
             self.data = data
             self.targets = targets
             self.shape = self.data.shape
+            self.atom_name_idx = 0
+            self.coordinates_idx = [1,2,3]
+            self.categorical_idx = [i for i in range(4,32)]
+            self.numerical_idx = [i for i in range(33,40)]
         
         
     

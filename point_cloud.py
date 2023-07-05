@@ -50,7 +50,6 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
             except:
                 print()
                 
-            #residue_time = time.time()
             if residue.get_full_id()[3][0] == " ":
 
                 resname = residue.get_resname()
@@ -63,14 +62,12 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     nitrogen_count = 0
                     donor_count = 0
                     acceptor_count = 0
-                    #append aa features for atom
+                    
                     atom_name = atom.get_id()
-                    #aa_time = time.time()
+                    
                     features = []
                     features.append(atom_name)
                     
-                    # TODO fix coordinates
-                    #features.append(tf.convert_to_tensor(atom.get_coord()))
                     for x in atom.get_coord():
                         features.append(x)
                     features.append(AA_TABLE.get_hydrophoby(resname))
@@ -90,26 +87,19 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     features.append(AA_TABLE.get_hbacceptor(resname))
                     features.append(AA_TABLE.get_hbdonoracceptor(resname))
                     features.append(AA_TABLE.get_propensities(resname))
-                    #aa_end = time.time()
-                    #print(f"AA features time:{aa_end - aa_time}")
-                    #atomic_time = time.time()
-                    # append atomic features for atom
+                    
                     features.append(ATOMIC_TABLE.get_propensities_valid(resname, atom_name))
                     features.append(ATOMIC_TABLE.get_propensities_invalid(resname, atom_name))
                     features.append(ATOMIC_TABLE.get_propensities_sasa_valid(resname, atom_name))
                     features.append(ATOMIC_TABLE.get_propensities_sasa_invalid(resname, atom_name))
-                    features.append(ATOMIC_TABLE.get_hydrophobicity(resname, atom_name))
-                    
+                    features.append(ATOMIC_TABLE.get_hydrophobicity(resname, atom_name))                    
                     features.append(ATOMIC_TABLE.get_volsite_aromatic(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_cation(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_anion(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_hydrophobic(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_acceptor(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_donor(resname,atom_name))
-                    #atomic_end = time.time()
-                    #print(f"AT features time:{atomic_end - atomic_time}")
-                    # calculate features
-                    #calculated_time = time.time()
+
                     small_neighborhood = neighbor_search.search(atom.get_coord(),DISTANCE)
                     valid_small_neighborhood = list()
                     for atoms_neighborhood in small_neighborhood:
@@ -149,23 +139,12 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     features.append(donor_count)
                     features.append(acceptor_count)
                     features.append(len(valid_big_neighborhood) - 1)
-                    #calculated_end = time.time()
-                    #print(f"Calculated features time:{calculated_end - calculated_time}")
                     
-                    #save = time.time()
                     
                     data.append((features,float(target_indicator)))
                     if counter == 10:
                         return files
-                    '''
-                    if atom.get_full_id()[2] in chains:
-                        value = chains[atom.get_full_id()[2]]
-                        value.append(tuple(features))               
-                        chains[atom.get_full_id()[2]] = value
-                    else:
-                        value = [tuple(features)]
-                        chains[atom.get_full_id()[2]] = value
-                    '''
+                    
         files.append(data)               
     return files
 
@@ -189,24 +168,21 @@ def one_hot_encode_strings(string_list):
     tokenizer.fit_on_texts(string_list)
 
     sequences = tokenizer.texts_to_sequences(string_list)
-    print(len(sequences))
     flat = list()
     for sublist in sequences:
         if sublist:
-            flat.append(sublist[0])
+            flat.append([sublist[0]])
         else:
-            flat.append(0)
-    print(len(flat))
-    
-    one_hot_encoded = tf.one_hot(flat, depth=ATOM_TYPES)
+            flat.append([0])
 
-    return one_hot_encoded
+
+    return flat
 
 def create_one_hot_atoms(tensor):
 
     # Extract the first position from every feature vector
     first_positions, rest = extract_first(tensor=tensor)
-    encoded_positions = one_hot_encode_strings(first_positions)
+    encoded_positions = tf.convert_to_tensor(one_hot_encode_strings(first_positions), dtype=np.float32)
     rest = tf.convert_to_tensor(rest)
     concatenated = tf.concat([encoded_positions,rest],axis=1)
 
@@ -252,26 +228,12 @@ def stack_ragged(tensors):
     return tf.RaggedTensor.from_row_lengths(values, lens)
 
 def split_dataset(data):
-    #final_targets = list()
-    #final_data = list()
     targets = list()
     for value in range(len(data)):
         first, second = separate_tuples(data[value])
         data[value] = tf.convert_to_tensor(create_one_hot_atoms(first))
-        #data[value] = tf.RaggedTensor.from_tensor(data[value])
-        '''
-        data[value] = np.array(create_one_hot_atoms(first)).astype(np.float32)
-        if value == 0:
-            final_data = np.array(data[value]).astype(np.float32)
-        else:            
-            final_data = np.vstack((final_data, data[value]))
-        '''
-        #data = np.concatenate(data,axis=1).astype(np.float32)
         targets.append(tf.convert_to_tensor(second))
         
-        #final_targets = np.concatenate((final_targets, targets), axis=0).astype(np.float32)
-    #data = stack_ragged(data)
-    #targets = stack_ragged(targets)
     return data, targets
 
 def load_dataset(args):
