@@ -27,9 +27,11 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
     protein_list_reader = open(protein_list_path)
     start = True
     counter =  0
+
     files = list()
     for line in protein_list_reader.readlines():
         counter += 1
+        print(f"Protein number: {counter}")
         line = line.split('/')[1].strip()
         protein = os.path.join(protein_path,line)
         target = open(os.path.join(targets_path,f"{line}_residues.csv"))
@@ -142,8 +144,8 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     
                     
                     data.append((features,float(target_indicator)))
-                    if counter == 10:
-                        return files
+                    #if counter == 3:
+                    #    return files
                     
         files.append(data)               
     return files

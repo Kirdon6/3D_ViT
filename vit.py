@@ -18,7 +18,7 @@ parser.add_argument("--create_dataset", default=False, type=bool,help="If True c
 parser.add_argument("--new_file_name", default="dataset_HOLO4k", type=str, help="Path for creating dataset.")
 parser.add_argument("--input_file", default="dataset_HOLO4k.npz", type=str, help="Path to saved dataset.")
 
-parser.add_argument("--batch_size", default=1, type=int, help="Batch size.")
+parser.add_argument("--batch_size", default=10, type=int, help="Batch size.")
 parser.add_argument("--debug", default=False, action="store_true", help="If given, run functions eagerly.")
 parser.add_argument("--dropout", default=0, type=float, help="Dropout regularization.")
 parser.add_argument("--epochs", default=30, type=int, help="Number of epochs.")
@@ -27,7 +27,7 @@ parser.add_argument("--label_smoothing", default=0.1, type=float, help="Label sm
 parser.add_argument("--seed", default=42, type=int, help="Random seed.")
 parser.add_argument("--threads", default=0, type=int, help="Maximum number of threads to use.")
 parser.add_argument("--weight_decay", default=0, type=float, help="Weight decay strength.")
-parser.add_argument("--embd_size", default=75, type=float, help="Weight decay strength.")
+parser.add_argument("--embd_size", default=127, type=float, help="Weight decay strength.")
 parser.add_argument("--num_heads", default=2, type=float, help="Weight decay strength.")
 parser.add_argument("--num_layers", default=2, type=float, help="Weight decay strength.")
 # TODO add possible arguments
@@ -41,9 +41,9 @@ class F1Score(tf.keras.metrics.Metric):
 
     def update_state(self, y_true, y_pred, sample_weight=None):
         if isinstance(y_true, tf.RaggedTensor):
-            y_true = y_true.to_tensor()
+            y_true = y_true.values
         if isinstance(y_pred, tf.RaggedTensor):
-            y_pred = y_pred.to_tensor()
+            y_pred = y_pred.values
 
         y_pred_classes = tf.cast(y_pred >= 0.5, dtype=tf.float32)
 
@@ -79,18 +79,19 @@ class SinusoidalEmbedding(tf.keras.layers.Layer):
 
     def call(self, inputs):
         inputs = tf.cast(inputs, dtype=tf.float64)
-        exponent = (2 * tf.range(self.dim // 2) / self.dim)
+        #exponent = (2 * tf.range(self.dim // 2) / self.dim)
+        exponent = (2 * tf.range(3 // 2) / 3)
         angles = 2 * math.pi * inputs / (10_000 ** exponent )
         sin_values = tf.sin(angles)
         cos_values = tf.cos(angles)
         embeddings = tf.concat([sin_values, cos_values], axis=-1)
-        return embeddings
+        return tf.cast(embeddings, dtype=np.float32)
     
 class TransformerBlock(tf.keras.layers.Layer):
     def __init__(self,num_heads, embd_size,  mlp_ratio=4):
         super(TransformerBlock, self).__init__()
         self.norm1 = tf.keras.layers.LayerNormalization()
-        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=40, value_dim=40) 
+        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=2, value_dim=2) 
         self.norm2 = tf.keras.layers.LayerNormalization()
         self.mlp = tf.keras.Sequential([
             tf.keras.layers.Dense(mlp_ratio * embd_size),
@@ -120,26 +121,42 @@ class TransformerBlock(tf.keras.layers.Layer):
 class Embedder(tf.keras.layers.Layer):
     def __init__(self, embded_dim ):
         super().__init__()
-        self.atom_name_embd = tf.keras.layers.Embedding(40, 40)
-        self.coordinate_embd = SinusoidalEmbedding(40)
-        self.numerical_embd = tf.keras.layers.Embedding(40,40)
+        self.atom_name_embd = tf.keras.layers.Embedding(100, 40)
+        self.coordinate_embd_x = SinusoidalEmbedding(40)
+        self.coordinate_embd_y = SinusoidalEmbedding(40)
+        self.coordinate_embd_z = SinusoidalEmbedding(40)
+        self.numerical_embd = tf.keras.layers.Embedding(500,40)
+        self.flat_layer = tf.keras.layers.Flatten()
         
     def split_inputs(self, inputs):
-        return None
+        names = inputs[:,:,:1]
+        coordinates = inputs[:,:, 1:4]
+        categorical = inputs[:,:,4:33]
+        numerical = inputs[:,:,33:41]
+        return names, coordinates, categorical, numerical
         
     def call(self, inputs):
         names, coordinates, categorical, numerical = self.split_inputs(inputs)
         
         atoms_embd = self.atom_name_embd(names)
-        x,y,z = coordinates
-        embd_x = self.coordinate_embd(x)
-        embd_y = self.coordinate_embd(y)
-        embd_z = self.coordinate_embd(z)
+        atoms_embd = tf.reshape(atoms_embd, shape=(-1, atoms_embd.shape[-1]))
+        #reshaped_tensor = tf.reshape(embedding_tensor, shape=(-1, embedding_tensor.shape[-1]))
+        
+        x,y,z = coordinates[0], coordinates[1], coordinates[2]
+        embd_x = self.coordinate_embd_x(x)
+        #embd_x = tf.expand_dims(embd_x, axis=1)
+        embd_y = self.coordinate_embd_y(y)
+        #embd_y = tf.expand_dims(embd_y, axis=1)
+        embd_z = self.coordinate_embd_z(z)
+        #embd_z = tf.expand_dims(embd_z, axis=1)
+        categorical = tf.reshape(categorical, shape=(-1, categorical.shape[-1]))
+        #categorical = tf.expand_dims(categorical,axis = 1)
         num_embd = self.numerical_embd(numerical)
+        num_embd = tf.reshape(num_embd, shape= (-1, num_embd.shape[-1]))
         concatenated = tf.concat([atoms_embd,embd_x, embd_y, embd_z, categorical, num_embd],axis=1)
 
 
-        return concatenated
+        return tf.expand_dims(concatenated, axis=1)
         
               
 class ViT3D(tf.keras.Model):
@@ -166,8 +183,6 @@ class ViT3D(tf.keras.Model):
             x = block(x)
             
         x = self.normalization(x)
-        x = tf.reduce_mean(x, axis=1)
-
         return x
     
 
@@ -202,6 +217,8 @@ def main(args: argparse.Namespace):
     inputs = tf.keras.layers.Input([None,40], ragged=True)
     
     embeddings = Embedder(40)(inputs)
+    
+    #flat = tf.keras.layers.Flatten()(embeddings)
     
     # TODO change arguments, put right data to encoder and decoder, they create positional embeddings
     transformer_output = ViT3D(holo4k.train.shape[0],args.batch_size,args.embd_size,args.num_layers,args.num_heads)(embeddings)
