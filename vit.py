@@ -1,4 +1,3 @@
-
 import tensorflow as tf
 
 import argparse
@@ -18,16 +17,16 @@ parser.add_argument("--create_dataset", default=False, type=bool,help="If True c
 parser.add_argument("--new_file_name", default="dataset_HOLO4k", type=str, help="Path for creating dataset.")
 parser.add_argument("--input_file", default="dataset_HOLO4k.npz", type=str, help="Path to saved dataset.")
 
-parser.add_argument("--batch_size", default=10, type=int, help="Batch size.")
+parser.add_argument("--batch_size", default=1, type=int, help="Batch size.")
 parser.add_argument("--debug", default=False, action="store_true", help="If given, run functions eagerly.")
 parser.add_argument("--dropout", default=0, type=float, help="Dropout regularization.")
-parser.add_argument("--epochs", default=30, type=int, help="Number of epochs.")
+parser.add_argument("--epochs", default=1, type=int, help="Number of epochs.")
 parser.add_argument("--hidden_layers", default=[400], nargs="*", type=int, help="Hidden layer sizes.")
 parser.add_argument("--label_smoothing", default=0.1, type=float, help="Label smoothing.")
 parser.add_argument("--seed", default=42, type=int, help="Random seed.")
 parser.add_argument("--threads", default=0, type=int, help="Maximum number of threads to use.")
 parser.add_argument("--weight_decay", default=0, type=float, help="Weight decay strength.")
-parser.add_argument("--embd_size", default=127, type=float, help="Weight decay strength.")
+parser.add_argument("--embd_size", default=349, type=float, help="Weight decay strength.")
 parser.add_argument("--num_heads", default=2, type=float, help="Weight decay strength.")
 parser.add_argument("--num_layers", default=2, type=float, help="Weight decay strength.")
 # TODO add possible arguments
@@ -136,27 +135,34 @@ class Embedder(tf.keras.layers.Layer):
         return names, coordinates, categorical, numerical
         
     def call(self, inputs):
+        batch_size = tf.shape(inputs)[0]
         names, coordinates, categorical, numerical = self.split_inputs(inputs)
         
         atoms_embd = self.atom_name_embd(names)
-        atoms_embd = tf.reshape(atoms_embd, shape=(-1, atoms_embd.shape[-1]))
+        print(atoms_embd.shape)
+        atoms_embd = tf.reshape(atoms_embd, shape=( batch_size, -1, atoms_embd.shape[-2] * atoms_embd.shape[-1]))
+        print(atoms_embd.shape)
         #reshaped_tensor = tf.reshape(embedding_tensor, shape=(-1, embedding_tensor.shape[-1]))
         
-        x,y,z = coordinates[0], coordinates[1], coordinates[2]
-        embd_x = self.coordinate_embd_x(x)
+        #x,y,z = coordinates[0], coordinates[1], coordinates[2]
+        #embd_x = self.coordinate_embd_x(x)
         #embd_x = tf.expand_dims(embd_x, axis=1)
-        embd_y = self.coordinate_embd_y(y)
+        #embd_y = self.coordinate_embd_y(y)
         #embd_y = tf.expand_dims(embd_y, axis=1)
-        embd_z = self.coordinate_embd_z(z)
+        #embd_z = self.coordinate_embd_z(z)
         #embd_z = tf.expand_dims(embd_z, axis=1)
-        categorical = tf.reshape(categorical, shape=(-1, categorical.shape[-1]))
+        print(categorical.shape)
+        categorical = tf.reshape(categorical, shape=(batch_size,-1, categorical.shape[-1]))
+        print(categorical.shape)
         #categorical = tf.expand_dims(categorical,axis = 1)
         num_embd = self.numerical_embd(numerical)
-        num_embd = tf.reshape(num_embd, shape= (-1, num_embd.shape[-1]))
-        concatenated = tf.concat([atoms_embd,embd_x, embd_y, embd_z, categorical, num_embd],axis=1)
+        print(num_embd.shape)
+        num_embd = tf.reshape(num_embd, shape= (batch_size, -1, num_embd.shape[-2] * num_embd.shape[-1]))
+        print(num_embd.shape)
+        concatenated = tf.concat([atoms_embd, categorical, num_embd],axis=-1)
 
 
-        return tf.expand_dims(concatenated, axis=1)
+        return concatenated
         
               
 class ViT3D(tf.keras.Model):
@@ -193,6 +199,7 @@ def main(args: argparse.Namespace):
     tf.keras.utils.set_random_seed(args.seed)
     tf.config.threading.set_inter_op_parallelism_threads(args.threads)
     tf.config.threading.set_intra_op_parallelism_threads(args.threads)
+    tf.data.experimental.enable_debug_mode()
 
     # Create logdir name
     args.logdir = os.path.join("logs", "{}-{}-{}".format(
@@ -253,6 +260,4 @@ def main(args: argparse.Namespace):
 if __name__ == '__main__':
     args = parser.parse_args([] if "__file__" not in  globals() else None)
     print(main(args))
-    
-    
     
