@@ -1,4 +1,5 @@
 import tensorflow as tf
+from keras import backend as K
 
 import argparse
 import numpy as np
@@ -6,7 +7,6 @@ import warnings
 import os
 import re
 import datetime
-import math
 from dataset import Dataset
 
 
@@ -26,77 +26,96 @@ parser.add_argument("--label_smoothing", default=0.1, type=float, help="Label sm
 parser.add_argument("--seed", default=42, type=int, help="Random seed.")
 parser.add_argument("--threads", default=0, type=int, help="Maximum number of threads to use.")
 parser.add_argument("--weight_decay", default=0, type=float, help="Weight decay strength.")
-parser.add_argument("--embd_size", default=349, type=float, help="Weight decay strength.")
 parser.add_argument("--num_heads", default=2, type=float, help="Weight decay strength.")
 parser.add_argument("--num_layers", default=2, type=float, help="Weight decay strength.")
+parser.add_argument("--embd_size", default=56, type=int, help="Weight decay strength.")
+parser.add_argument("--pe_size", default=24, type=int, help="Weight decay strength.")
 # TODO add possible arguments
 
-class F1Score(tf.keras.metrics.Metric):
-    def __init__(self, name='f1_score', **kwargs):
-        super(F1Score, self).__init__(name=name, **kwargs)
-        self.true_positives = self.add_weight(name='tp', initializer='zeros')
-        self.false_positives = self.add_weight(name='fp', initializer='zeros')
-        self.false_negatives = self.add_weight(name='fn', initializer='zeros')
+def recall(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    possible_positives = K.sum(K.round(K.clip(y_true, 0, 1)))
+    recall_keras = true_positives / (possible_positives + K.epsilon())
+    return recall_keras
 
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        if isinstance(y_true, tf.RaggedTensor):
-            y_true = y_true.values
-        if isinstance(y_pred, tf.RaggedTensor):
-            y_pred = y_pred.values
 
-        y_pred_classes = tf.cast(y_pred >= 0.5, dtype=tf.float32)
+def precision(y_true, y_pred):
+    true_positives = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    predicted_positives = K.sum(K.round(K.clip(y_pred, 0, 1)))
+    precision_keras = true_positives / (predicted_positives + K.epsilon())
+    return precision_keras
 
-        true_positives = tf.math.reduce_sum(y_true * y_pred_classes)
-        false_positives = tf.math.reduce_sum((1 - y_true) * y_pred_classes)
-        false_negatives = tf.math.reduce_sum(y_true * (1 - y_pred_classes))
 
-        self.true_positives.assign_add(true_positives)
-        self.false_positives.assign_add(false_positives)
-        self.false_negatives.assign_add(false_negatives)
+def specificity(y_true, y_pred):
+    tn = K.sum(K.round(K.clip((1 - y_true) * (1 - y_pred), 0, 1)))
+    fp = K.sum(K.round(K.clip((1 - y_true) * y_pred, 0, 1)))
+    return tn / (tn + fp + K.epsilon())
 
-    def result(self):
-        precision = self.true_positives / (self.true_positives + self.false_positives + tf.keras.backend.epsilon())
-        recall = self.true_positives / (self.true_positives + self.false_negatives + tf.keras.backend.epsilon())
-        f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
-        return f1
 
-    def reset_state(self):
-        tf.keras.backend.batch_set_value([(v, 0) for v in self.variables])
+
+def f1(y_true, y_pred):
+    p = precision(y_true, y_pred)
+    r = recall(y_true, y_pred)
+    return 2 * ((p * r) / (p + r + K.epsilon()))
+
+def matthews_correlation_coefficient(y_true, y_pred):
+    tp = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)))
+    tn = K.sum(K.round(K.clip((1 - y_true) * (1 - y_pred), 0, 1)))
+    fp = K.sum(K.round(K.clip((1 - y_true) * y_pred, 0, 1)))
+    fn = K.sum(K.round(K.clip(y_true * (1 - y_pred), 0, 1)))
+
+    num = tp * tn - fp * fn
+    den = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+    return num / K.sqrt(den + K.epsilon())
 
 
 def ragged_binary_crossentropy(y_true, y_pred):
     return tf.losses.BinaryCrossentropy()(y_true.values, y_pred)
+
+class PositionalEmbedding(tf.keras.layers.Layer):
+        def __init__(self, dim, *args, **kwargs):
+            assert dim % 2 == 0  # The `dim` needs to be even to have the same number of sin&cos.
+            super().__init__(*args, **kwargs)
+            self.dim = dim
+
+        def get_config(self):
+            return {"dim": self.dim}
+
+        def call(self, inputs, batch_size, max_seq_len):
+            boundary = tf.cast(self.dim / 2 , tf.int32)
+            
+            def create_idx_matrix(lower_boundary, upper_boundary):
+                max_sentence_len_idxs = tf.range(lower_boundary, upper_boundary, dtype=tf.float32)
+                reshaped = tf.reshape(tf.repeat(max_sentence_len_idxs, repeats=max_seq_len), shape=[boundary,max_seq_len])
+                transposed = tf.transpose(reshaped, perm=[1,0])
+                
+                return transposed
+            
+            i_smaller = create_idx_matrix(0,boundary)
+            i_greater = create_idx_matrix(boundary, self.dim)
+            
+            pos = tf.reshape(tf.repeat(tf.range(max_seq_len, dtype=tf.float32), boundary), shape=[max_seq_len, boundary])
+            
+            part1 = tf.math.sin(pos / (10_000 ** (2 * i_smaller / self.dim)))
+            part2 = tf.math.cos(pos / (10_000 ** (2 * (i_greater - self.dim/2) / self.dim)))
+            positional_embeddings = tf.concat([part1, part2], axis=1)
+            positional_embeddings_batch = tf.reshape(tf.tile(positional_embeddings, multiples=[batch_size, 1]),
+                                                         shape=[batch_size, max_seq_len, self.dim])
+            return positional_embeddings_batch
     
-class SinusoidalEmbedding(tf.keras.layers.Layer):
-    def __init__(self, dim, *args, **kwargs):
-        assert dim % 2 == 0  # The `dim` needs to be even to have the same number of sin&cos.
-        super().__init__(*args, **kwargs)
-        self.dim = dim
-
-    def get_config(self):
-        return {"dim": self.dim}
-
-    def call(self, inputs):
-        inputs = tf.cast(inputs, dtype=tf.float64)
-        #exponent = (2 * tf.range(self.dim // 2) / self.dim)
-        exponent = (2 * tf.range(3 // 2) / 3)
-        angles = 2 * math.pi * inputs / (10_000 ** exponent )
-        sin_values = tf.sin(angles)
-        cos_values = tf.cos(angles)
-        embeddings = tf.concat([sin_values, cos_values], axis=-1)
-        return tf.cast(embeddings, dtype=np.float32)
     
 class TransformerBlock(tf.keras.layers.Layer):
-    def __init__(self,num_heads, embd_size,  mlp_ratio=4):
+    def __init__(self,num_heads, ffn_size,  mlp_ratio=4):
         super(TransformerBlock, self).__init__()
         self.norm1 = tf.keras.layers.LayerNormalization()
-        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=2, value_dim=2) 
+        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=10, value_dim=2) 
         self.norm2 = tf.keras.layers.LayerNormalization()
         self.mlp = tf.keras.Sequential([
-            tf.keras.layers.Dense(mlp_ratio * embd_size),
+            tf.keras.layers.Dense(mlp_ratio * ffn_size),
             tf.keras.layers.ReLU(),
-            tf.keras.layers.Dense(embd_size)
+            tf.keras.layers.Dense(ffn_size)
         ])
+        self.dropout = tf.keras.layers.Dropout(rate=args.dropout)
         
     def call(self, inputs):
         
@@ -104,28 +123,25 @@ class TransformerBlock(tf.keras.layers.Layer):
         
         x = self.norm1(inputs)
         x = self.self_attention(x,x)
+        x = self.dropout(x)
         x += residual
         
         residual = x
         
         x = self.norm2(x)
         x = self.mlp(x)
+        x = self.dropout(x)
         x += residual
         
         return x
 
-# TODO add params 
-# TODO check if sinusoidal one or three
-# check numerical embedding
+
 class Embedder(tf.keras.layers.Layer):
-    def __init__(self, embded_dim ):
+    def __init__(self, dim, pe_dim):
         super().__init__()
-        self.atom_name_embd = tf.keras.layers.Embedding(100, 40)
-        self.coordinate_embd_x = SinusoidalEmbedding(40)
-        self.coordinate_embd_y = SinusoidalEmbedding(40)
-        self.coordinate_embd_z = SinusoidalEmbedding(40)
-        self.numerical_embd = tf.keras.layers.Embedding(500,40)
-        self.flat_layer = tf.keras.layers.Flatten()
+        self.atom_name_embd = tf.keras.layers.Embedding(100, dim)
+        self.numerical_embd = tf.keras.layers.Embedding(500,dim // 7)
+        
         
     def split_inputs(self, inputs):
         names = inputs[:,:,:1]
@@ -139,51 +155,39 @@ class Embedder(tf.keras.layers.Layer):
         names, coordinates, categorical, numerical = self.split_inputs(inputs)
         
         atoms_embd = self.atom_name_embd(names)
-        print(atoms_embd.shape)
         atoms_embd = tf.reshape(atoms_embd, shape=( batch_size, -1, atoms_embd.shape[-2] * atoms_embd.shape[-1]))
-        print(atoms_embd.shape)
-        #reshaped_tensor = tf.reshape(embedding_tensor, shape=(-1, embedding_tensor.shape[-1]))
         
-        #x,y,z = coordinates[0], coordinates[1], coordinates[2]
-        #embd_x = self.coordinate_embd_x(x)
-        #embd_x = tf.expand_dims(embd_x, axis=1)
-        #embd_y = self.coordinate_embd_y(y)
-        #embd_y = tf.expand_dims(embd_y, axis=1)
-        #embd_z = self.coordinate_embd_z(z)
-        #embd_z = tf.expand_dims(embd_z, axis=1)
-        print(categorical.shape)
         categorical = tf.reshape(categorical, shape=(batch_size,-1, categorical.shape[-1]))
-        print(categorical.shape)
-        #categorical = tf.expand_dims(categorical,axis = 1)
+
         num_embd = self.numerical_embd(numerical)
-        print(num_embd.shape)
         num_embd = tf.reshape(num_embd, shape= (batch_size, -1, num_embd.shape[-2] * num_embd.shape[-1]))
-        print(num_embd.shape)
-        concatenated = tf.concat([atoms_embd, categorical, num_embd],axis=-1)
+        
+        embeddings = tf.keras.layers.Add()([atoms_embd, num_embd])
+        features = tf.concat([embeddings, categorical, coordinates],axis=-1)
 
-
-        return concatenated
+        return features
         
               
 class ViT3D(tf.keras.Model):
-    def __init__(self, input_shape, batch_size, embd_size, num_layers, num_heads, mlp_ratio=4):
+    def __init__(self, num_heads, ffn_size, num_layers, mlp_ratio=4):
         super(ViT3D,self).__init__()
+        self.postional_embedding = PositionalEmbedding(ffn_size)
         
-        self.patch_size = batch_size
-        self.num_batches = (input_shape // batch_size) #* 200 #input_shape[1]
-        # TODO create embeddings
-        #self.pos_emb = self.add_weight("pos_emb", shape=(1, self.num_batches, embd_size))
-        
-        self.transformer_blocks = [TransformerBlock(num_heads,embd_size, mlp_ratio) for _ in range(num_layers)]
+        self.transformer_blocks = [TransformerBlock(num_heads,ffn_size, mlp_ratio) for _ in range(num_layers)]
         
         self.normalization = tf.keras.layers.LayerNormalization()
+        
+    def get_max_length(self, tensor):
+        print(len(tensor.values))
+        return len(tensor.values)
         
         
         
     def call(self, inputs):
+        batch_size = tf.shape(inputs)[0]
+        max_len = self.get_max_length(inputs)
         
-        #x = tf.reshape(inputs,(-1,self.num_batches, inputs.shape[-1]))
-        x = inputs #x #+ self.pos_emb
+        x = inputs + self.postional_embedding(inputs, batch_size, max_len)
         
         for block in self.transformer_blocks:
             x = block(x)
@@ -209,44 +213,28 @@ def main(args: argparse.Namespace):
     ))
     
         
-    #TODO load dataset
     holo4k = Dataset(args, 0.33, 0.33)
-    
-    print(holo4k.dev.data[0].shape)
 
-    # TODO preprocess dataset
-    
-    # TODO create embeddings
-    
-    #TODO split
-    
-    # TODO create input
     inputs = tf.keras.layers.Input([None,40], ragged=True)
     
-    embeddings = Embedder(40)(inputs)
+    embeddings = Embedder(args.embd_size, args.pe_size)(inputs)
     
-    #flat = tf.keras.layers.Flatten()(embeddings)
-    
-    # TODO change arguments, put right data to encoder and decoder, they create positional embeddings
-    transformer_output = ViT3D(holo4k.train.shape[0],args.batch_size,args.embd_size,args.num_layers,args.num_heads)(embeddings)
-    
-    # TODO call transformer loop over layers and get output
-    model = tf.keras.layers.Dense(256, activation = tf.nn.relu)(transformer_output)
-    predictions = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(model)
+    transformer_output = ViT3D(args.num_heads, args.embd_size + 29 + 3,args.num_layers)(embeddings)
+    predictions = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)(transformer_output)
     
     model = tf.keras.Model(inputs=inputs, outputs=predictions)
-    # TODO create predictions
     optimizer = tf.optimizers.experimental.AdamW(weight_decay=args.weight_decay)
     
     
-    # TODO create optimizer, loss and metrics
-    
-    #metrics = [tf.metrics.Accuracy()]
-    f1_score_metric = F1Score()
-    
     model.compile(optimizer=optimizer,
                   loss = ragged_binary_crossentropy,
-                  metrics=[f1_score_metric])
+                  metrics=[
+        "accuracy",
+        precision,
+        recall,
+        f1,
+        specificity,
+    ])
     
     model.tb_callback = tf.keras.callbacks.TensorBoard(args.logdir)
     

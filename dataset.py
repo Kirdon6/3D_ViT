@@ -18,19 +18,12 @@ class Dataset:
             self.data = data
             self.targets = targets
             self.shape = self.data.shape
-            self.atom_name_idx = 0
-            self.coordinates_idx = [1,2,3]
-            self.categorical_idx = [i for i in range(4,32)]
-            self.numerical_idx = [i for i in range(33,40)]
         
         
     
     def __init__(self, args:argparse.ArgumentParser, dev_size: float == 0.1, test_size: float == 0.1 ) -> None:
         data, targets =  point_cloud.load_dataset(args)
-        #data = np.concatenate(data).astype(np.float32)
-        #targets = np.concatenate(targets).astype(np.float32)
         train_data, test_data, train_targets, test_targets = train_test_split(data,targets, test_size=test_size, random_state=42)
-        print(dev_size / ( 1 - test_size))
         dev_size = round(dev_size /  (1 - test_size),2)
         train_data, dev_data, train_targets, dev_targets = train_test_split(train_data, train_targets, test_size=dev_size, random_state=42)
         train_data = stack_ragged(train_data.tolist())
