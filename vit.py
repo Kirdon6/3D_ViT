@@ -213,7 +213,7 @@ def main(args: argparse.Namespace):
     ))
     
         
-    holo4k = Dataset(args, 0.33, 0.33)
+    holo4k = Dataset(args)
 
     inputs = tf.keras.layers.Input([None,40], ragged=True)
     
