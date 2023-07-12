@@ -19,7 +19,7 @@ parser.add_argument("--input_file", default="dataset_HOLO4k.npz", type=str, help
 
 parser.add_argument("--batch_size", default=1, type=int, help="Batch size.")
 parser.add_argument("--debug", default=False, action="store_true", help="If given, run functions eagerly.")
-parser.add_argument("--dropout", default=0, type=float, help="Dropout regularization.")
+parser.add_argument("--dropout", default=0.2, type=float, help="Dropout regularization.")
 parser.add_argument("--epochs", default=1, type=int, help="Number of epochs.")
 parser.add_argument("--hidden_layers", default=[400], nargs="*", type=int, help="Hidden layer sizes.")
 parser.add_argument("--label_smoothing", default=0.1, type=float, help="Label smoothing.")
