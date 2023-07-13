@@ -108,7 +108,7 @@ class TransformerBlock(tf.keras.layers.Layer):
     def __init__(self,num_heads, ffn_size,  mlp_ratio=4):
         super(TransformerBlock, self).__init__()
         self.norm1 = tf.keras.layers.LayerNormalization()
-        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=10, value_dim=2) 
+        self.self_attention = tf.keras.layers.MultiHeadAttention(num_heads=num_heads, key_dim=10, value_dim=10) 
         self.norm2 = tf.keras.layers.LayerNormalization()
         self.mlp = tf.keras.Sequential([
             tf.keras.layers.Dense(mlp_ratio * ffn_size),
@@ -178,7 +178,7 @@ class ViT3D(tf.keras.Model):
         self.normalization = tf.keras.layers.LayerNormalization()
         
     def get_max_length(self, tensor):
-        print(len(tensor.values))
+        #print(len(tensor.values))
         return len(tensor.values)
         
         
@@ -214,6 +214,7 @@ def main(args: argparse.Namespace):
     
         
     holo4k = Dataset(args)
+    print(holo4k.train.shape)
 
     inputs = tf.keras.layers.Input([None,40], ragged=True)
     
@@ -234,6 +235,7 @@ def main(args: argparse.Namespace):
         recall,
         f1,
         specificity,
+        matthews_correlation_coefficient
     ])
     
     model.tb_callback = tf.keras.callbacks.TensorBoard(args.logdir)
@@ -247,5 +249,5 @@ def main(args: argparse.Namespace):
            
 if __name__ == '__main__':
     args = parser.parse_args([] if "__file__" not in  globals() else None)
-    print(main(args))
+    main(args)
     
