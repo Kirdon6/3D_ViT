@@ -212,32 +212,24 @@ class aa_table():
     def get_amide(self,aa):
         return self._amide[aa]
 
-        
     def get_charge(self,aa):
         return self._charge[aa]
-        
-        
+          
     def get_polar(self,aa):
         return self._polar[aa]
 
-        
-        
     def get_ion(self,aa):
         return self._ion[aa]
-        
-        
+           
     def get_hbdonor(self,aa):
         return self._donor[aa]
         
     def get_hbacceptor(self,aa):
         return self._acceptor[aa]
-
-        
+  
     def get_hbdonoracceptor(self,aa):
         return self._donoracceptor[aa]
 
-        
-        
     def get_propensities(self,aa):
         return self._propensities[aa]
 

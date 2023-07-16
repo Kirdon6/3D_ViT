@@ -7,7 +7,7 @@ import os
 import argparse
 
 
-FEATURES_SIZE = 2
+
 DISTANCE = 6 # (A)
 PROTRUSION_DISTANCE = 10
 ATOMIC_TABLE = at_table.at_table()
@@ -68,13 +68,16 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     atom_name = atom.get_id()
                     
                     features = []
+                    # atom_name
                     features.append(atom_name)
                     
+                    # coordinates
                     for x in atom.get_coord():
                         features.append(x)
+                        
+                    #categorical features
                     features.append(AA_TABLE.get_hydrophoby(resname))
-                    features.append(AA_TABLE.get_hydrophily(resname))
-                    features.append(AA_TABLE.get_hydrophaty_index(resname))
+                    features.append(AA_TABLE.get_hydrophily(resname))                    
                     features.append(AA_TABLE.get_aliphaty(resname))
                     features.append(AA_TABLE.get_aromatic(resname))
                     features.append(AA_TABLE.get_sulphuric(resname))
@@ -88,19 +91,23 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     features.append(AA_TABLE.get_hbdonor(resname))
                     features.append(AA_TABLE.get_hbacceptor(resname))
                     features.append(AA_TABLE.get_hbdonoracceptor(resname))
-                    features.append(AA_TABLE.get_propensities(resname))
-                    
-                    features.append(ATOMIC_TABLE.get_propensities_valid(resname, atom_name))
-                    features.append(ATOMIC_TABLE.get_propensities_invalid(resname, atom_name))
-                    features.append(ATOMIC_TABLE.get_propensities_sasa_valid(resname, atom_name))
-                    features.append(ATOMIC_TABLE.get_propensities_sasa_invalid(resname, atom_name))
-                    features.append(ATOMIC_TABLE.get_hydrophobicity(resname, atom_name))                    
                     features.append(ATOMIC_TABLE.get_volsite_aromatic(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_cation(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_anion(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_hydrophobic(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_acceptor(resname,atom_name))
                     features.append(ATOMIC_TABLE.get_volsite_donor(resname,atom_name))
+                    
+                    # numerical values
+                    features.append(atom.get_bfactor())                    
+                    features.append(AA_TABLE.get_hydrophaty_index(resname))
+                    features.append(AA_TABLE.get_propensities(resname))                    
+                    features.append(ATOMIC_TABLE.get_propensities_valid(resname, atom_name))
+                    features.append(ATOMIC_TABLE.get_propensities_invalid(resname, atom_name))
+                    features.append(ATOMIC_TABLE.get_propensities_sasa_valid(resname, atom_name))
+                    features.append(ATOMIC_TABLE.get_propensities_sasa_invalid(resname, atom_name))
+                    features.append(ATOMIC_TABLE.get_hydrophobicity(resname, atom_name))                    
+
 
                     small_neighborhood = neighbor_search.search(atom.get_coord(),DISTANCE)
                     valid_small_neighborhood = list()
@@ -144,9 +151,7 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     
                     
                     data.append((features,float(target_indicator)))
-                    #if counter == 3:
-                    #    return files
-                    
+
         files.append(data)               
     return files
 

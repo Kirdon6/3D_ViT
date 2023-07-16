@@ -21,7 +21,7 @@ class Dataset:
         
         
     
-    def __init__(self, args:argparse.ArgumentParser, dev_size: float == 0.1, test_size: float == 0.1 ) -> None:
+    def __init__(self, args:argparse.ArgumentParser, dev_size: float = 0.1, test_size: float = 0.1 ) -> None:
         data, targets =  point_cloud.load_dataset(args)
         train_data, test_data, train_targets, test_targets = train_test_split(data,targets, test_size=test_size, random_state=42)
         dev_size = round(dev_size /  (1 - test_size),2)
