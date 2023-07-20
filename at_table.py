@@ -39,7 +39,7 @@ class at_table():
         acceptor = dict()
         donor = dict()
         
-        with open(r'C:\Users\ROG\Documents\3D_ViT\tables\volsite-atomic-properties.csv') as file:
+        with open(r'tables\volsite-atomic-properties.csv') as file:
             file.readline()
             for line in file.readlines():
                 split = line.split(',')
