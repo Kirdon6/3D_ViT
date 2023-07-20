@@ -1,3 +1,4 @@
+# class for handling atommic properties from csv files
 class at_table():
     
     def __init__(self):

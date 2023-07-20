@@ -22,6 +22,7 @@ def calculate_distance(atom1, atom2):
 
 # main function for creating dataset from pdb files
 def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k', protein_list_path='holo4k.ds'):
+    # opening pdb file and target file
     protein_list_reader = open(protein_list_path)
     start = True
     counter =  0
@@ -37,12 +38,14 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
             start = False
             target_indicator = target.readline()
         
-        
+        # parsing PDB file
         parser = Bio.PDB.PDBParser()
         structure = parser.get_structure(line, protein)
         residues = structure.get_residues()
+        # initializing NeighborSearch for computing neighbors
         neighbor_search = Bio.PDB.NeighborSearch(Bio.PDB.Selection.unfold_entities(structure, 'A'))
         data = list()
+        # adding features for all atoms in residue
         for residue in residues:
             try:
                 bad_line = target.readline().split(',')
@@ -106,7 +109,7 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                     features.append(ATOMIC_TABLE.get_propensities_sasa_invalid(resname, atom_name))
                     features.append(ATOMIC_TABLE.get_hydrophobicity(resname, atom_name))                    
 
-
+                    # calculating neighbor features
                     small_neighborhood = neighbor_search.search(atom.get_coord(),DISTANCE)
                     valid_small_neighborhood = list()
                     for atoms_neighborhood in small_neighborhood:
@@ -131,7 +134,6 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                             oxygen_count += 1
                         elif neighbor_atom.get_id().startswith('N'):
                             nitrogen_count += 1
-                        # donor acceptor
                         if ATOMIC_TABLE.get_volsite_donor(neighbor_atom.get_parent().get_resname(), neighbor_atom_name) != 0:
                             donor_count += 1
                         if ATOMIC_TABLE.get_volsite_acceptor(neighbor_atom.get_parent().get_resname(), neighbor_atom_name) != 0:
