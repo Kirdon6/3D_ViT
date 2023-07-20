@@ -1,7 +1,5 @@
 from collections import defaultdict
 class aa_table():
-    # mising some aminoacids
-    # negative values????
     _hydrophobic = defaultdict(lambda:0,{
         'ALA':1,
         'ARG':0,
