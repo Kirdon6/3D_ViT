@@ -15,6 +15,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--create_dataset", default=True, type=bool,help="If True creates and saves dataset otherwise just loads.")
 parser.add_argument("--new_file_name", default="dataset_HOLO4k", type=str, help="Path for creating dataset.")
 parser.add_argument("--input_file", default="dataset_HOLO4k_small.npz", type=str, help="Path to saved dataset.")
+parser.add_argument("--proteins_path", default="holo4k", type=str, help="Path to pdb files for dataset.")
+parser.add_argument("--targets_path", default="analyze_residues_holo4k", type=str, help="Path to folder with targets.")
+parser.add_argument("--protein_list", default="holo4k.ds", type=str, help="Path to list of files to process")
 
 # function for calculating distance between 2 points
 def calculate_distance(atom1, atom2):
@@ -207,7 +210,7 @@ def split_dataset(data):
 def load_dataset(args):
     if args.create_dataset:
         # Create the dataset, split it, and save to a new file
-        data = create_dataset()
+        data = create_dataset(protein_path=args.proteins_path, targets_path=args.targets_path, protein_list_path=args.protein_list)
         data, targets = split_dataset(data)
         np.savez_compressed(args.new_file_name, data=data, targets=targets)
 
