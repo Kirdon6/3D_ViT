@@ -6,23 +6,21 @@ import at_table
 import os
 import argparse
 
-
-
-DISTANCE = 6 # (A)
+DISTANCE = 6
 PROTRUSION_DISTANCE = 10
 ATOMIC_TABLE = at_table.at_table()
 AA_TABLE = amino_acid_table.aa_table()
-ATOM_TYPES = 36
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--create_dataset", default=True, type=bool,help="If True creates and saves dataset otherwise just loads.")
 parser.add_argument("--new_file_name", default="dataset_HOLO4k", type=str, help="Path for creating dataset.")
-parser.add_argument("--input_file", default="dataset_HOLO4k.npz", type=str, help="Path to saved dataset.")
+parser.add_argument("--input_file", default="dataset_HOLO4k_small.npz", type=str, help="Path to saved dataset.")
 
+# function for calculating distance between 2 points
 def calculate_distance(atom1, atom2):
     return np.linalg.norm(atom1 - atom2)
 
-
+# main function for creating dataset from pdb files
 def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k', protein_list_path='holo4k.ds'):
     protein_list_reader = open(protein_list_path)
     start = True
@@ -50,7 +48,7 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                 bad_line = target.readline().split(',')
                 target_indicator = int(bad_line[-1])
             except:
-                print()
+                raise ValueError
                 
             if residue.get_full_id()[3][0] == " ":
 
@@ -139,7 +137,7 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
                         if ATOMIC_TABLE.get_volsite_acceptor(neighbor_atom.get_parent().get_resname(), neighbor_atom_name) != 0:
                             acceptor_count += 1
                             
-                            
+                    # neighbor features
                     features.append(len(valid_small_neighborhood) - 1)
                     features.append(weighted_neighbors)
                     features.append(carbon_count)
@@ -155,22 +153,22 @@ def create_dataset(protein_path='holo4k', targets_path='analyze_residues_holo4k'
         files.append(data)               
     return files
 
+# Function to separate the first and second elements of each tuple in a tensor
 def separate_tuples(tensor):
     first, second = list(), list()
     for i in range(len(tensor)):
         first.append(tensor[i][0])
         second.append(tensor[i][1])
     return first, second
+
+# Function to extract the first element from each sublist in a tensor
 def extract_first(tensor):
     first_items = [sublist[0] for sublist in tensor]
     rest = [sublist[1:] for sublist in tensor]
-    return first_items , rest
+    return first_items, rest
 
-def get_unique_length(my_list):
-    unique_length = len(set(my_list))
-    return unique_length
-
-def one_hot_encode_strings(string_list):
+# Function to convert a list of strings to integer-encoded sequences using Keras Tokenizer
+def convert_atom_type(string_list):
     tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=len(set(string_list)))
     tokenizer.fit_on_texts(string_list)
 
@@ -181,86 +179,43 @@ def one_hot_encode_strings(string_list):
             flat.append([sublist[0]])
         else:
             flat.append([0])
-
-
     return flat
 
-def create_one_hot_atoms(tensor):
-
+# Function to encode the atom type using Tokenizer and concatenate the encoded positions with the rest of the data
+def encode_atom_type(tensor):
     # Extract the first position from every feature vector
     first_positions, rest = extract_first(tensor=tensor)
-    encoded_positions = tf.convert_to_tensor(one_hot_encode_strings(first_positions), dtype=np.float32)
+    encoded_positions = tf.convert_to_tensor(convert_atom_type(first_positions), dtype=np.float32)
     rest = tf.convert_to_tensor(rest)
-    concatenated = tf.concat([encoded_positions,rest],axis=1)
-
-
+    concatenated = tf.concat([encoded_positions, rest], axis=1)
     return concatenated
 
-def find_all_atom_types(protein_path='holo4k', targets_path='analyze_residues_holo4k', protein_list_path='holo4k.ds'):
-    protein_list_reader = open(protein_list_path)
-    start = True
-    for line in protein_list_reader.readlines():
-        line = line.split('/')[1].strip()
-        protein = os.path.join(protein_path,line)
-        target = open(os.path.join(targets_path,f"{line}_residues.csv"))
-        if start:
-            start = False
-            target_indicator = target.readline()
-        
-        
-        parser = Bio.PDB.PDBParser()
-        structure = parser.get_structure(line, protein)
-        residues = structure.get_residues()
-        atoms = list()
-        for residue in residues:
-            try:
-                bad_line = target.readline().split(',')
-                target_indicator = int(bad_line[-1])
-            except:
-                print()
-                
-            #residue_time = time.time()
-            if residue.get_full_id()[3][0] == " ":
-                for atom in residue.get_atoms():
-                    
-                    #calculated features
-                    #append aa features for atom
-                    atoms.append(atom.get_id())
-                    
-    return atoms
-
-def stack_ragged(tensors):
-    values = tf.concat(tensors, axis=0)
-    lens = tf.stack([tf.shape(t, out_type=tf.int64)[0] for t in tensors])
-    return tf.RaggedTensor.from_row_lengths(values, lens)
-
+# Function to split the dataset into data and targets
 def split_dataset(data):
     targets = list()
     for value in range(len(data)):
+        # Separate the first and second elements of each tuple
         first, second = separate_tuples(data[value])
-        data[value] = tf.convert_to_tensor(create_one_hot_atoms(first))
+        # Convert the atom type and concatenate with the rest of the data
+        data[value] = tf.convert_to_tensor(encode_atom_type(first))
         targets.append(tf.convert_to_tensor(second))
-        
     return data, targets
 
+# Main function for loading the dataset
 def load_dataset(args):
     if args.create_dataset:
+        # Create the dataset, split it, and save to a new file
         data = create_dataset()
         data, targets = split_dataset(data)
-        np.savez_compressed(args.new_file_name,data = data, targets=targets)
+        np.savez_compressed(args.new_file_name, data=data, targets=targets)
+
+    # Load the existing dataset
     holo4k = np.load(args.input_file, allow_pickle=True)
     data = holo4k["data"]
     targets = holo4k["targets"]
     return data, targets
 
 
-# TODO deprecated
-if __name__ == "__main__":  
-    args = parser.parse_args()
-    if args.create_dataset:
-        data = create_dataset()
-        data, targets = split_dataset(data)
-        np.savez_compressed(args.new_file_name,data = data, targets=targets)
-    holo4k = np.load(args.input_file, allow_pickle=True)
-    data = holo4k["data"]
-    targets = holo4k["targets"]
+if __name__ == "__main__":
+    args = parser.parse_args()  # Parse command-line arguments
+    data, targets = load_dataset(args)  # Load the dataset and its targets
