@@ -3,6 +3,7 @@ analyze_residues_chen11/
 holo4k/
 analyze_residues_coach420/
 analyze_residues_holo4k/
+logs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
